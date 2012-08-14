@@ -1,0 +1,24 @@
+#!/usr/bin/env coffee
+regex = new RegExp(/\s$/)
+regex2 = new RegExp(/\s\s$/)
+fs = require "fs"
+exec = require("child_process").exec
+exec "git diff --cached --name-only", (err, stdout, stderr) ->
+  data = stdout.split("\n")
+  for filename in data
+    if filename != ""
+      console.log "対象ファイル #{filename}"
+      ((filename)->
+        fs.readFile filename, "utf8", (err, data) ->
+          if data.match regex2
+            console.log "ファイルの終わりがやばい"
+            process.exit 1
+          else
+            data = data.split("\n")
+            for line in [0...data.length]
+              if err? then console.log err
+              if data[line].match regex
+                console.log "#{filename}の#{line+1}行目とかがやばい"
+                process.exit 1
+              else
+                console.log "正常だよん") filename
