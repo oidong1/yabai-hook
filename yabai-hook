@@ -1,24 +1,78 @@
 #!/usr/bin/env coffee
-regex = new RegExp(/\s$/)
-regex2 = new RegExp(/\s\s$/)
-fs = require "fs"
+
+fs   = require "fs"
 exec = require("child_process").exec
-exec "git diff --cached --name-only", (err, stdout, stderr) ->
-  data = stdout.split("\n")
-  for filename in data
-    if filename != ""
-      console.log "対象ファイル #{filename}"
-      ((filename)->
-        fs.readFile filename, "utf8", (err, data) ->
-          if data.match regex2
-            console.log "ファイルの終わりがやばい"
-            process.exit 1
+
+# 該当箇所の前後でプレビューする行数
+previewLines = 3
+
+# 指定されたファイルを読み込み不要な空白をチェックする
+checkWhitespace = (filename, callback) ->
+  lineEndRegex   = new RegExp(/\s+$/)
+  fileEndRegex   = new RegExp(/\s{2,}$/)
+  whitespaceFlag = false
+
+  fs.readFile filename, "utf8", (err, fileContent) ->
+    if err?
+      console.log "\n#{filename} を開く際にエラーが発生しました"
+      throw err
+
+    if fileContent.match fileEndRegex
+      whitespaceFlag = true
+      console.log "\n\x1b[45m#{filename} の終わりに余分な空白があります\x1b[m"
+
+    # ファイルの中身を行ごとに分割
+    lines = fileContent.split("\n")
+    for lineCount in [0...lines.length]
+      whitespaceIndex = lines[lineCount].search lineEndRegex
+      if whitespaceIndex != -1
+        whitespaceFlag = true
+        console.log "\n\x1b[44m#{filename} の #{lineCount+1} 行目の終わりに余分な空白があります\x1b[m"
+
+        # 該当行の前後をプレビュー
+        # プレビューする行範囲を算出
+        previewStart = lineCount - previewLines
+        if previewStart < 0
+          previewStart = 0
+        previewEnd   = lineCount + previewLines
+        if previewEnd > lines.length - 1
+          previewEnd = lines.length - 1
+
+        # プレビュー範囲を出力
+        for previewLineCount in [previewStart..previewEnd]
+          # 行番号をフォーマット
+          formattedLineCount = (previewLineCount + 1).toString()
+          while formattedLineCount.length < 5
+            formattedLineCount = " " + formattedLineCount
+          if lineCount == previewLineCount
+            before = lines[previewLineCount].substr 0, whitespaceIndex
+            after = lines[previewLineCount].substr whitespaceIndex
+            console.log "\x1b[7m#{formattedLineCount} \x1b[m#{before}\x1b[1m\x1b[7m#{after}\x1b[m"
           else
-            data = data.split("\n")
-            for line in [0...data.length]
-              if err? then console.log err
-              if data[line].match regex
-                console.log "#{filename}の#{line+1}行目とかがやばい"
-                process.exit 1
-              else
-                console.log "正常だよん") filename
+            console.log "\x1b[7m#{formattedLineCount} \x1b[m#{lines[previewLineCount]}"
+    callback whitespaceFlag
+
+exec "git diff --cached --name-only", (err, stdoutFromGit, stderr) ->
+
+  # git diff からの標準出力を受け取ってファイル名に分割
+  files = stdoutFromGit.split "\n"
+  # 空白のファイル名を除去
+  for i in [0...files.length]
+    if not files[i]
+      files.splice i, 1
+
+  # ファイルの処理が非同期で実行されてしまうので、終了時を確認するために必要な関数
+  whitespaceFlag = false
+  fileCount = 0
+  collectResults = (flag) ->
+    fileCount += 1
+    if flag
+      whitespaceFlag = true
+    if fileCount == files.length and whitespaceFlag == true
+      console.log "\n\x1b[41m余分な空白があるためコミットを中止しました\x1b[m"
+      process.exit 1
+
+  # ファイルの空白をチェック
+  for filename in files
+    if filename
+      checkWhitespace filename, collectResults
