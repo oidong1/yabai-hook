@@ -28,73 +28,74 @@ bold = escapeByCode '1'
 underline = escapeByCode '4'
 inverse = escapeByCode '7'
 
-# 指定されたファイルを読み込み不要な空白をチェックする
-checkWhitespace = (filename, callback) ->
-  lineEndRegex   = new RegExp(/\s+$/)
-  fileEndRegex   = new RegExp(/\s{2,}$/)
-  whitespaceFlag = false
+isNumber = (val) -> typeof val == 'number' && !isNaN val
+isNotEmpty = (val) -> val.trim().length != 0
 
-  fs.readFile filename, "utf8", (err, fileContent) ->
-    if err?
-      console.log "\n#{filename} を開く際にエラーが発生しました"
-      throw err
+endsWithWhiteSpacesPattern = /(\s+$)/
+endsWithEmptyRowPattern = /(\s+$)/
 
-    if fileContent.match fileEndRegex
-      whitespaceFlag = true
-      console.log "\n#{bg.purple}#{filename} の終わりに余分な空白があります#{cls}"
+highlightWhiteSpaces = (row) ->
+  row.replace endsWithWhiteSpacesPattern, "#{inverse}#{underline}$1#{cls}"
 
-    # ファイルの中身を行ごとに分割
-    lines = fileContent.split("\n")
-    for lineCount in [0...lines.length]
-      whitespaceIndex = lines[lineCount].search lineEndRegex
-      if whitespaceIndex != -1
-        whitespaceFlag = true
-        console.log "\n#{bg.blue}#{filename} の #{lineCount+1} 行目の終わりに余分な空白があります#{cls}"
+appendRowNumber = (row, index) ->
+  # 5桁決め打ちでいいのか?
+  rowNumber = (' ' + (index + 1)).slice(-5)
+  "#{inverse}#{rowNumber} #{cls} #{row}"
 
-        # 該当行の前後をプレビュー
-        # プレビューする行範囲を算出
-        previewStart = lineCount - previewLines
-        if previewStart < 0
-          previewStart = 0
-        previewEnd   = lineCount + previewLines
-        if previewEnd > lines.length - 1
-          previewEnd = lines.length - 1
+getHighlightRows = (rows, target, start, end) ->
+  part = rows.slice start, end
+  part.map (row, offset) ->
+    index = start + offset
+    appendRowNumber highlightWhiteSpaces(row), index
 
-        # プレビュー範囲を出力
-        for previewLineCount in [previewStart..previewEnd]
-          # 行番号をフォーマット
-          formattedLineCount = (previewLineCount + 1).toString()
-          while formattedLineCount.length < 5
-            formattedLineCount = " " + formattedLineCount
-          if lineCount == previewLineCount
-            before = lines[previewLineCount].substr 0, whitespaceIndex
-            after = lines[previewLineCount].substr whitespaceIndex
-            console.log "#{inverse}#{formattedLineCount} #{cls}#{before}#{underline}#{inverse}#{after}#{cls}"
-          else
-            console.log "#{inverse}#{formattedLineCount} #{cls}#{lines[previewLineCount]}"
-    callback whitespaceFlag
+getRangeOfNeigborRow = (rows, index, width) ->
+  start: Math.max index - width, 0
+  end: Math.min index + width, rows.length - 1
 
-exec "git diff --cached --name-only", (err, stdoutFromGit, stderr) ->
+getNumbersOfRowEndingWithWhiteSpaces = (rows) ->
+  isEndingWithWhiteSpaces = (row) ->
+    Boolean(row.match endsWithWhiteSpacesPattern)
+
+  rows.map (row, index) ->
+    index if isEndingWithWhiteSpaces(row)
+  .filter(isNumber)
+
+isEndingWithEmptyRows = (content) ->
+  Boolean(content.match endsWithEmptyRowPattern)
+
+getWhiteSpacesErrorMessage = (fileName, index) ->
+  "#{bg.blue}#{fileName} の #{index + 1} 行目の末尾に余分な空白があります#{cls}"
+
+getEmptyRowErrorMessage = (fileName, index) ->
+  "#{bg.purple}#{fileName} の末尾に余分な空行があります#{cls}"
+
+exec 'git diff --cached --name-only', (err, stdoutFromGit, stderr) ->
   # git diff からの標準出力を受け取ってファイル名に分割
-  files = stdoutFromGit.split "\n"
-  # 空白のファイル名を除去
-  for i in [0...files.length]
-    if not files[i]
-      files.splice i, 1
+  fileNames = stdoutFromGit.split('\n').filter isNotEmpty
 
-  # ファイルの処理が非同期で実行されてしまうので、終了時を確認するために必要な関数
-  whitespaceFlag = false
-  fileCount = 0
-  collectResults = (flag) ->
-    fileCount += 1
-    if flag
-      whitespaceFlag = true
-    if fileCount == files.length and whitespaceFlag == true
-      console.log ''
-      console.log "#{bg.red}余分な空白があるためコミットを中止しました#{cls}"
-      process.exit 1
+  (iterate = (output) ->
+    fileName = fileNames.shift()
 
-  # ファイルの空白をチェック
-  for filename in files
-    if filename
-      checkWhitespace filename, collectResults
+    unless fileName?
+      console.log(output.join('\n\n'))
+      process.exit Math.min output.length, 1
+
+    fs.readFile fileName, 'utf8', (err, content) ->
+      if err?
+        console.log '#{bg.red}ファイルの読み込みに失敗しました#{cls}'
+        return
+
+      rows = content.split '\n'
+      output = output.concat(getNumbersOfRowEndingWithWhiteSpaces(rows)
+        .map (index) ->
+          {start, end} = getRangeOfNeigborRow rows, index, previewLines
+          codePreview = getHighlightRows(rows, index, start, end)
+          errorMessage = getWhiteSpacesErrorMessage(fileName, index)
+          [errorMessage].concat(codePreview).join('\n')
+      )
+
+      if isEndingWithEmptyRows(content)
+        output.push(getEmptyRowErrorMessage(fileName))
+
+      iterate(output)
+  )([])
