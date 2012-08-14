@@ -28,9 +28,6 @@ bold = escapeByCode '1'
 underline = escapeByCode '4'
 inverse = escapeByCode '7'
 
-isNumber = (val) -> typeof val == 'number' && !isNaN val
-isNotEmpty = (val) -> val.trim().length != 0
-
 endsWithWhiteSpacesPattern = /(\s+$)/
 endsWithEmptyRowPattern = /(\s+$)/
 
@@ -43,10 +40,7 @@ appendRowNumber = (row, index) ->
   "#{inverse}#{rowNumber} #{cls} #{row}"
 
 getHighlightRows = (rows, target, start, end) ->
-  part = rows.slice start, end
-  part.map (row, offset) ->
-    index = start + offset
-    appendRowNumber highlightWhiteSpaces(row), index
+  appendRowNumber highlightWhiteSpaces(row), start + offset for row, offset in rows.slice start, end
 
 getRangeOfNeigborRow = (rows, index, width) ->
   start: Math.max index - width, 0
@@ -56,9 +50,7 @@ getNumbersOfRowEndingWithWhiteSpaces = (rows) ->
   isEndingWithWhiteSpaces = (row) ->
     Boolean(row.match endsWithWhiteSpacesPattern)
 
-  rows.map (row, index) ->
-    index if isEndingWithWhiteSpaces(row)
-  .filter(isNumber)
+  index for row, index in rows when isEndingWithWhiteSpaces(row)
 
 isEndingWithEmptyRows = (content) ->
   Boolean(content.match endsWithEmptyRowPattern)
@@ -70,8 +62,7 @@ getEmptyRowErrorMessage = (fileName, index) ->
   "#{bg.purple}#{fileName} の末尾に余分な空行があります#{cls}"
 
 exec 'git diff --cached --name-only', (err, stdoutFromGit, stderr) ->
-  # git diff からの標準出力を受け取ってファイル名に分割
-  fileNames = stdoutFromGit.split('\n').filter isNotEmpty
+  fileNames = (fileName for fileName in stdoutFromGit.split('\n') when fileName.length isnt 0)
 
   (iterate = (output) ->
     fileName = fileNames.shift()
@@ -86,12 +77,11 @@ exec 'git diff --cached --name-only', (err, stdoutFromGit, stderr) ->
         return
 
       rows = content.split '\n'
-      whiteSpacesError = getNumbersOfRowEndingWithWhiteSpaces(rows)
-        .map (index) ->
-          {start, end} = getRangeOfNeigborRow rows, index, previewLines
-          codePreview = getHighlightRows(rows, index, start, end)
-          errorMessage = getWhiteSpacesErrorMessage(fileName, index)
-          [errorMessage].concat(codePreview).join('\n')
+      whiteSpacesError = for index in getNumbersOfRowEndingWithWhiteSpaces(rows)
+        {start, end} = getRangeOfNeigborRow rows, index, previewLines
+        codePreview = getHighlightRows(rows, index, start, end)
+        errorMessage = getWhiteSpacesErrorMessage(fileName, index)
+        [errorMessage].concat(codePreview).join('\n')
 
       emptyRowError = if isEndingWithEmptyRows(content)
       then getEmptyRowErrorMessage(fileName)
