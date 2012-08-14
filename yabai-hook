@@ -86,16 +86,16 @@ exec 'git diff --cached --name-only', (err, stdoutFromGit, stderr) ->
         return
 
       rows = content.split '\n'
-      output = output.concat(getNumbersOfRowEndingWithWhiteSpaces(rows)
+      whiteSpacesError = getNumbersOfRowEndingWithWhiteSpaces(rows)
         .map (index) ->
           {start, end} = getRangeOfNeigborRow rows, index, previewLines
           codePreview = getHighlightRows(rows, index, start, end)
           errorMessage = getWhiteSpacesErrorMessage(fileName, index)
           [errorMessage].concat(codePreview).join('\n')
-      )
 
-      if isEndingWithEmptyRows(content)
-        output.push(getEmptyRowErrorMessage(fileName))
+      emptyRowError = if isEndingWithEmptyRows(content)
+      then getEmptyRowErrorMessage(fileName)
+      else []
 
-      iterate(output)
+      iterate(output.concat(whiteSpacesError).concat(emptyRowError))
   )([])
