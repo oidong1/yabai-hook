@@ -6,6 +6,28 @@ exec = require("child_process").exec
 # 該当箇所の前後でプレビューする行数
 previewLines = 3
 
+# エスケープシーケンス列挙
+color = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'gray']
+
+escapeByCode = (str) -> "\x1b[#{str}m"
+
+bg = color.reduce (prev, curr, index) ->
+  colorCode = index + 40
+  prev[curr] = escapeByCode colorCode
+  prev
+, {}
+
+fg = color.reduce (prev, curr, index) ->
+  colorCode = index + 30
+  prev[curr] = escapeByCode colorCode
+  prev
+, {}
+
+cls = escapeByCode '0'
+bold = escapeByCode '1'
+underline = escapeByCode '4'
+inverse = escapeByCode '7'
+
 # 指定されたファイルを読み込み不要な空白をチェックする
 checkWhitespace = (filename, callback) ->
   lineEndRegex   = new RegExp(/\s+$/)
@@ -19,7 +41,7 @@ checkWhitespace = (filename, callback) ->
 
     if fileContent.match fileEndRegex
       whitespaceFlag = true
-      console.log "\n\x1b[45m#{filename} の終わりに余分な空白があります\x1b[m"
+      console.log "\n#{bg.purple}#{filename} の終わりに余分な空白があります#{cls}"
 
     # ファイルの中身を行ごとに分割
     lines = fileContent.split("\n")
@@ -27,7 +49,7 @@ checkWhitespace = (filename, callback) ->
       whitespaceIndex = lines[lineCount].search lineEndRegex
       if whitespaceIndex != -1
         whitespaceFlag = true
-        console.log "\n\x1b[44m#{filename} の #{lineCount+1} 行目の終わりに余分な空白があります\x1b[m"
+        console.log "\n#{bg.blue}#{filename} の #{lineCount+1} 行目の終わりに余分な空白があります#{cls}"
 
         # 該当行の前後をプレビュー
         # プレビューする行範囲を算出
@@ -47,13 +69,12 @@ checkWhitespace = (filename, callback) ->
           if lineCount == previewLineCount
             before = lines[previewLineCount].substr 0, whitespaceIndex
             after = lines[previewLineCount].substr whitespaceIndex
-            console.log "\x1b[7m#{formattedLineCount} \x1b[m#{before}\x1b[1m\x1b[7m#{after}\x1b[m"
+            console.log "#{inverse}#{formattedLineCount} #{cls}#{before}#{underline}#{inverse}#{after}#{cls}"
           else
-            console.log "\x1b[7m#{formattedLineCount} \x1b[m#{lines[previewLineCount]}"
+            console.log "#{inverse}#{formattedLineCount} #{cls}#{lines[previewLineCount]}"
     callback whitespaceFlag
 
 exec "git diff --cached --name-only", (err, stdoutFromGit, stderr) ->
-
   # git diff からの標準出力を受け取ってファイル名に分割
   files = stdoutFromGit.split "\n"
   # 空白のファイル名を除去
@@ -69,7 +90,8 @@ exec "git diff --cached --name-only", (err, stdoutFromGit, stderr) ->
     if flag
       whitespaceFlag = true
     if fileCount == files.length and whitespaceFlag == true
-      console.log "\n\x1b[41m余分な空白があるためコミットを中止しました\x1b[m"
+      console.log ''
+      console.log "#{bg.red}余分な空白があるためコミットを中止しました#{cls}"
       process.exit 1
 
   # ファイルの空白をチェック
