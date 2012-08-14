@@ -53,7 +53,6 @@ checkWhitespace = (filename, callback) ->
     callback whitespaceFlag
 
 exec "git diff --cached --name-only", (err, stdoutFromGit, stderr) ->
-
   # git diff からの標準出力を受け取ってファイル名に分割
   files = stdoutFromGit.split "\n"
   # 空白のファイル名を除去
