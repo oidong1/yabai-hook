@@ -36,7 +36,7 @@ highlightWhiteSpaces = (row) ->
 
 appendRowNumber = (row, index) ->
   # 5桁決め打ちでいいのか?
-  rowNumber = (' ' + (index + 1)).slice(-5)
+  rowNumber = ('    ' + (index + 1)).slice(-5)
   "#{inverse}#{rowNumber} #{cls} #{row}"
 
 getHighlightRows = (rows, target, start, end) ->
