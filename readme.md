@@ -8,3 +8,8 @@ yabai-hook
 
 `(リポジトリ)/.git/hooks/pre-commit` にリネームして置いて、
 `chmod +x pre-commit` とかで実行権限を与える
+
+スペシャルサンクス
+------------------
+@nyaocat
+@chiepomme
