@@ -29,7 +29,7 @@ underline = escapeByCode '4'
 inverse = escapeByCode '7'
 
 endsWithWhiteSpacesPattern = /(\s+$)/
-endsWithEmptyRowPattern = /(\s+$)/
+endsWithEmptyRowPattern = /(\s{2,}$)/
 
 highlightWhiteSpaces = (row) ->
   row.replace endsWithWhiteSpacesPattern, "#{inverse}#{underline}$1#{cls}"
