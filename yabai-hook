@@ -69,7 +69,7 @@ exec 'git diff --cached --name-only', (err, stdoutFromGit, stderr) ->
 
     unless fileName?
       console.log(output.join('\n\n'))
-      process.exit Math.min output.length, 1
+      process.exit Number output.length > 0
 
     fs.readFile fileName, 'utf8', (err, content) ->
       if err?
